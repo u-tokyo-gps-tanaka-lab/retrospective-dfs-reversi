@@ -49,7 +49,15 @@
 #include <nmmintrin.h>
 #include <wmmintrin.h>
 #include <immintrin.h>
+#include <limits>
+#include <fstream>
 
+bool _BitScanForward64(unsigned long* index, uint64_t mask) {
+    if (mask == 0) return false; // ビットが立っていない場合は false を返す
+
+    *index = __builtin_ctzll(mask); // 最下位ビットの位置を取得
+    return true;
+}
 
 typedef struct Board {
 
@@ -740,6 +748,10 @@ bool retrospective_search(const Board &board, const bool from_pass) {
 
 	if (retrospective_searched.find(uni) != retrospective_searched.end())return false;
 	retrospective_searched.insert(uni);
+	if (retrospective_searched.size() > 0x20000000LL) {
+		std::cout << "Memory overflow" << std::endl;
+		return true;
+	}
 
 	const uint64_t occupied = board.player | board.opponent;
 	if (!IsConnected(occupied))return false;
@@ -2501,7 +2513,52 @@ std::vector<std::array<uint64_t, 2>>move34s() {
 	return std::vector<std::array<uint64_t, 2>>(answers.begin(), answers.end());
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+	{
+		for (int i = 5; i <= 15; ++i) {
+			searched.clear();
+			leafnode.clear();
+			DISCS = i;
+			search(Board::initial());
+			std::cout << "discs = " << i << ": internal nodes = " << searched.size() << ", leaf nodes = " << leafnode.size() << std::endl;
+		}
+	}
+	for (size_t i = 1; i < (size_t) argc; i++) {
+		std::ifstream infile(argv[i]);
+		if (!infile) {
+			std::cerr << "Failed open file " << argv[i] << std::endl;
+			return 1;
+		}
+		std::string line;
+		while (std::getline(infile, line)) {
+			std::cerr << "line: " << line << ", line.size()=" << line.size() << std::endl;
+
+			if (line.size() >= 64) {
+				uint64_t mystone = 0, opstone = 0;
+				for (size_t i = 0; i < 64; i++) {
+					if (line[i] == 'X') {
+						mystone |= (1LL << i);
+					} else if (line[i] == 'O') {
+						opstone |= (1LL << i);
+					}
+				}
+				Board bb(mystone, opstone);
+				retroflips.resize(bb.popcount() + 1);
+				retrospective_searched.clear();
+				std::cout << "start: " << i << std::endl;
+				const bool x = retrospective_search(bb, false);
+				if (x) {
+					std::cout << "OK: " << line << std::endl;
+				} else {
+					std::cout << "NG: " << line << std::endl;
+				}
+			}
+		}
+	}
+	return 0;
+}
+
+int old_main() {
 
 	{
 		for (int i = 5; i <= 15; ++i) {
